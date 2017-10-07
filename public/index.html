@@ -14,28 +14,32 @@
             <h1>YouTube 자동 댓글</h1>
             <p id="searchResult"></p>
             <form action="">
-                <div class="form-group col-xs-12 col-md-5 col-lg-5">
-                    <input class="form-control" type="text"  id="email" value="migz.beunited@gmail.com" required placeholder="Google Email Address">
-                </div>
-                <div class="form-group col-xs-12 col-md-5 col-lg-5">
-                    <input class="form-control" type="password"  id="password" value="Imaprogrammer08" required placeholder="Password">
-                </div>
-                <div class="form-group col-xs-12 col-md-2 col-lg-2">
-                    <input class="form-control" min="1" type="number"  id="loopcount" value="2" required placeholder="Loop Count">
-                </div>
+                <!--<div class="form-group col-xs-12 col-md-5 col-lg-5">
+                    <input class="form-control" type="text"  id="email" value="ghse4521@gmail.com" required placeholder="Google Email Address">
+                </div>-->
+             <!--   <div class="form-group col-xs-12 col-md-5 col-lg-5">
+                    <input class="form-control" type="password"  id="password" value="qwas1357" required placeholder="Password">
+                </div>-->
                 <div class="form-group col-xs-12 col-md-6 col-lg-12">
                     <textarea rows="5" class="form-control" type="text"  id="message" required placeholder="Message">Test</textarea>
                 </div>
+                <div class="form-group col-xs-12 col-md-2 col-lg-2">
+                    <label for="loopcount">Loop Count:</label>
+                    <input class="form-control" min="1" type="number"  id="loopcount" value="2" required placeholder="Loop Count">
+                </div>
                 <div class="form-group col-xs-12 col-md-5 col-lg-5">
+                    <label for="image">Image:</label>
                     <input class="form-control" type="text"  id="image" value="test" required placeholder="Image ">
                 </div>
                 <!--<div class="form-group col-xs-12 col-md-5 col-lg-5">
                     <input class="form-control" type="text"  id="keyword" required placeholder="Keyword ">
                 </div>-->
                 <div class="form-group col-xs-12 col-md-1 col-lg-1">
+                    <label for="ClickBtn">Actions:</label>
                     <button class="btn btn-primary" id="ClickBtn" onclick="buttonClicked();"><!-- Run Search -->런 검색</button>
                 </div>
                 <div class="form-group col-xs-12 col-md-1 col-lg-1">
+                    <label for="stopBtn">&nbsp;&nbsp;&nbsp;&nbsp;</label>
                     <button class="btn btn-primary" id="StopBtn" disabled onclick="restartScript();">Stop</button>
                 </div>
             </form>
@@ -58,18 +62,14 @@
     function buttonClicked(){
         var id = document.getElementById('ClickBtn');
         var keyword = document.getElementById('keyword');
-        var email = document.getElementById('email');
-        var password = document.getElementById('password');
         var message = document.getElementById('message');
         //var keyword = document.getElementById('keyword');
         var loopcount = document.getElementById('loopcount');
-        if ( email.value != "" || password.value != "" || message.value != "" || loopcount.value != ""){
+        if ( message.value != "" || loopcount.value != ""){
             id.disabled=true;
             StopBtn.disabled=false;
             id.innerHTML="Running...";
             var data={
-                email : email.value,
-                password : password.value,
                 message : message.value,
                 loopcount : loopcount.value
 
@@ -98,6 +98,15 @@
     //when we receive buttonUpdate, do this
     socket.on('searchUpdate', function(data){
         document.getElementById("searchResult").innerHTML = data;
+    });
+
+    //when we receive buttonUpdate, do this
+    socket.on('checkIfAccountReported', function(data){
+        document.getElementById("searchResult").innerHTML = "<h1 class='bg-danger'>" + data + "  account reported</h1>";
+        var StopBtn = document.getElementById('StopBtn')
+        var id = document.getElementById('ClickBtn')
+        //socket.emit('restart');
+
     });
 </script>
 </body>

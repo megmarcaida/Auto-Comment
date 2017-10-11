@@ -13,8 +13,12 @@ var nightmare = Nightmare({show: true, height: 1100,width: 1920 })
 var mysql = require('mysql');
 
 var connection = mysql.createConnection({host : 'localhost',user : 'root',password : '',database : 'youtube',});
+
+
 var queryString = 'Select id,keyword from keywords where status = "0"';
 var userString = 'Select id,emailaddress,password from users where status = "0"';
+var promoString = 'Select id,promotext, (select count(*) from promotext where status = "") as count from promotext where status = "0"';
+
 var updatequeryNo = 'update keywords set status = "N" where id = ?';
 var updatequeryYes = 'update keywords set status = "Y" where id = ?';
 
@@ -48,6 +52,7 @@ io.on('connection', function(client) {
 
     });
 
+    //START SEARCHING
     client.on('clicked', function(data) {
         console.log("RUNNING...");
         //console.log(data);
@@ -57,10 +62,8 @@ io.on('connection', function(client) {
 
         connection.query(userString,function(error,userrows,field){
             connection.query(queryString, function (err, rows, fields) {
+                connection.query(promoString, function (err, promorows, fields) {
 
-                    //console.log(JSON.stringify(rows))
-                //console.log(JSON.stringify(userrows))
-                    console.log(userrows[0].emailaddress)
                     if (err) throw err;
                     return nightmare.goto("https://accounts.google.com/signin/v2/identifier?passive=true&continue=https%3A%2F%2Fwww.youtube.com%2Fsignin%3Faction_handle_signin%3Dtrue%26app%3Ddesktop%26hl%3Den%26next%3D%252F&uilel=3&service=youtube&flowName=GlifWebSignIn&flowEntry=ServiceLogin")
                             .wait(5000)
@@ -69,18 +72,21 @@ io.on('connection', function(client) {
                             .wait('#Passwd')
                             .type('#Passwd', userrows[0].password + '\u000d')
                             .then(function (result) {
-                                return search(nightmare, rows, 0, data, 1,userrows,0) //and finally run the function again since it's still here
+                                return search(nightmare, rows, 0, data, 1,userrows,0,promorows,0,0) //and finally run the function again since it's still here
                             })
                             .catch((error) => {
                             console.log('Search Failed: ' + error)
                     });
 
+                });
             });
 
         });
 
-        function search(nightmare,rows,count,data,loopcount,userrows,usercount){
-            //console.log((loopcount+2) + " AW")
+
+        //INITIAL SEARCH
+        function search(nightmare,rows,count,data,loopcount,userrows,usercount,promorows,promocount,countToBlocked){
+            console.log(promocount)
             return nightmare
                 //.goto('https://www.youtube.com/results?sp=CANQFA%253D%253D&q='+ rows[count].keyword ).wait('body')
                     .wait(10000)
@@ -95,86 +101,74 @@ io.on('connection', function(client) {
                     .click('yt-formatted-string#simplebox-placeholder')
                     .wait(4000)
                     .wait('#textarea')
-                    .insert('#textarea',data.message)
+                    .insert('#textarea',promorows[promocount].promotext)
                     .wait(5000)
                     .click('ytd-button-renderer#submit-button')
                     .wait(5000)
-                    .exists('#footer-message.footer-error-message')
-                    .then(function(ifExist)
+                    .exists('ytd-button-renderer#submit-button')
+                    .then(function(result)
                     {
-                        console.log(ifExist)
-                        if(!ifExist) {
 
-                            console.log(x);
-                            /* connection.query(updatequeryYes,[result,keywords[x].id],function(err,results){
-                             io.emit('searchUpdate',"Result :" + "User Exist. , URL :" + result  + "<br>" + JSON.stringify(results));
-                             console.log(results);
-                             });*/
-                            if (loopcount < data.loopcount) {
-                                return searchLoop(nightmare, rows, count, data, loopcount + 1,userrows,usercount)
+                        if(countToBlocked<10) {
+                            if (loopcount <= data.loopcount) {
+                                console.log("SEARCH LOOP SUCCESS")
+                                console.log(promocount)
+
+                                return searchLoop(nightmare, rows, count, data, loopcount + 1, userrows, usercount, promorows, promocount + 1, countToBlocked+1)
                             }
                             else {
-                                return searchLoop(nightmare, rows, count + 1, data, 0,userrows,usercount)
+                                return searchLoop(nightmare, rows, count + 1, data, 0, userrows, usercount, promorows, promocount + 1, countToBlocked+1)
                             }
                         }
                         else{
-                            io.emit('checkIfAccountReported',userrows[usercount].emailaddress)
-                            console.log('ACCOUNT REPORTED');
-
-                            return start(nightmare,rows,count,data,loopcount,userrows,usercount+1);
+                            io.emit('checkIfAccountReported', userrows[usercount].emailaddress)
+                            return start(nightmare, rows, count, data, loopcount, userrows, usercount + 1, promorows, promocount + 1, 0);
                         }
                     })
                     .catch((error) => {
-
-                    var x = count++;
-            console.log("FIRST SEARCH" )
-
-            /* connection.query(updatequeryNo,[keywords[x].id],function(err,results){
-             io.emit('searchUpdate',"Result :" + "User Doesn't Exist."  + "<br>" + JSON.stringify(results));
-             console.log(results);
-             });*/
-            if (loopcount < data.loopcount) {
-                return searchLoop(nightmare, rows, x, data,loopcount,userrows,usercount)
-            }
-            else
-            {
-                return searchLoop(nightmare, rows, x+1, data,0,userrows,usercount)
-            }
-        });
+                        var x = count++;
+                        console.log("FIRST search ERROR" )
+                        if (loopcount < data.loopcount) {
+                            return searchLoop(nightmare, rows, x, data,loopcount,userrows,usercount,promorows,promocount,countToBlocked)
+                        }
+                        else
+                        {
+                            return searchLoop(nightmare, rows, x+1, data,0,userrows,usercount,promorows,promocount,countToBlocked)
+                        }
+                    });
         }
 
 
-
-        function start(nightmare,rows,count,data,loopcount,userrows,usercount) {
+        //RESTART SEARCHING
+        function start(nightmare,rows,count,data,loopcount,userrows,usercount,promorows,promocount,countToBlocked) {
             console.log("SUCCESS RESTART")
             console.log(userrows[usercount].emailaddress)
                 return nightmare.goto("https://youtube.com/logout")
                         .wait('body')
                         .goto("https://accounts.google.com/signin/v2/identifier?passive=true&continue=https%3A%2F%2Fwww.youtube.com")
-                    .wait(5000)
-                    .wait('#identifierId')
-                    .type('#identifierId', userrows[usercount].emailaddress + '\u000d')
-                    .wait(5000)
-                    .wait('input.whsOnd')
-                    .type('input.whsOnd', userrows[usercount].password + '\u000d')
-                    .wait(5000)
-                    .then(function (result) {
-                        console.log("going to loop....")
-                        return searchLoop(nightmare,rows,count,data,loopcount,userrows,usercount)
-                    })
-                    .catch((error) => {
-                        console.log('Search Failed: ' + error)
-                    });
+                        .wait(5000)
+                        .wait('#identifierId')
+                        .type('#identifierId', userrows[usercount].emailaddress + '\u000d')
+                        .wait(5000)
+                        .wait('input.whsOnd')
+                        .type('input.whsOnd', userrows[usercount].password + '\u000d')
+                        .wait(5000)
+                        .then(function (result) {
+                            console.log("going to loop....")
+                            return searchLoop(nightmare,rows,count,data,loopcount,userrows,usercount,promorows,promocount,0)
+                        })
+                        .catch(function(error) {
+                            console.log('Search Failed: ' + error)
+                        });
         }
 
 
-
-        function searchLoop(nightmare,rows,count,data,loopcount,userrows,usercount){
-            //console.log((loopcount+2) + " AW")
+        //SEARCH LOOP
+        function searchLoop(nightmare,rows,count,data,loopcount,userrows,usercount,promorows,promocount,countToBlocked){
+            console.log(promocount)
             return nightmare
                     .goto('https://www.youtube.com/results?sp=CANQFA%253D%253D&q='+ rows[count].keyword ).wait('body')
                     .wait(10000)
-                    //.click('a#video-title:nth-child(4)')
                     .click('#contents > ytd-video-renderer:nth-child('+loopcount+') > #dismissable > ytd-thumbnail a#thumbnail ')
                     .wait(10000)
                     .scrollTo(400, 0)
@@ -186,62 +180,58 @@ io.on('connection', function(client) {
                     .click('yt-formatted-string#simplebox-placeholder')
                     .wait(4000)
                     .wait('#textarea')
-                    .type('#textarea',data.message)
+                    .insert('#textarea',promorows[promocount].promotext)
                     .wait(5000)
-                    .click('ytd-button-renderer#submit-button').wait(5000)
-                    .exists('#footer-message.footer-error-message')
-                    .then(function(ifExist)
-                    {
-
+                    .click('ytd-button-renderer#submit-button')
+                    .then(function(result) {
                         var x = count;
-                        //console.log("url: " + result )
+                        if (promocount > promorows[promocount].count)
+                        {
+                            promocount = 0;
+                            loopcount = 0;
+                        }
 
-                        if (!ifExist) {
-                            console.log('Existing');
-                            if (loopcount < data.loopcount) {
-                                console.log(x);
-                                return searchLoop(nightmare, rows, x, data, loopcount + 1);
+                        if (countToBlocked < 10){
 
+
+                            console.log("COUNTO BLOCKED: " + countToBlocked)
+                            if (loopcount <= data.loopcount) {
+                                console.log("SEARCH LOOP SUCCESS")
+                                return searchLoop(nightmare, rows, x, data, loopcount + 1, userrows, usercount, promorows, promocount + 1, countToBlocked+1);
                             }
                             else {
                                 connection.query(updatequeryYes, [rows[count].id], function (err, results) {
                                     io.emit('searchUpdate', "Result : Done Commenting <br>" + JSON.stringify(results));
                                     console.log(results);
                                 });
-                                return searchLoop(nightmare, rows, x + 1, data, 0)
-
+                                return searchLoop(nightmare, rows, x + 1, data, 0, userrows, usercount, promorows, promocount + 1, countToBlocked+1)
                             }
                         }
-                        else {
-                            io.emit('checkIfAccountReported',userrows[usercount].emailaddress)
-                            console.log('ACCOUNT REPORTED');
-
-                            return start(nightmare,rows,count,data,loopcount,userrows,usercount+1);
+                        else{
+                            io.emit('checkIfAccountReported', userrows[usercount].emailaddress)
+                            return start(nightmare, rows, count, data, loopcount, userrows, usercount + 1, promorows, promocount + 1, 0);
                         }
+
+
+
                     })
-                    .catch((error) => {
+                    .catch(function(error) {
+                        var x = count++;
 
-                    var x = count++;
-                    console.log("Catch Error FAILED. RESTARTING....." )
+                        if (loopcount < data.loopcount) {
+                            console.log("FAILED" )
+                            return searchLoop(nightmare, rows, x, data,loopcount+1,userrows,usercount,promorows,promocount,countToBlocked+1);
+                        }
+                        else
+                        {
+                            /*connection.query(updatequeryYes,[rows[count].id],function(err,results){
+                                io.emit('searchUpdate',"Result : Done Commenting <br>" + JSON.stringify(results));
+                                console.log(results);
+                            });*/
+                            return searchLoop(nightmare, rows, x+1, data,0,userrows,usercount,promorows,promocount,countToBlocked);
 
-                    /* connection.query(updatequeryNo,[keywords[x].id],function(err,results){
-                     io.emit('searchUpdate',"Result :" + "User Doesn't Exist."  + "<br>" + JSON.stringify(results));
-                     console.log(results);
-                     });*/
-                    if (loopcount < data.loopcount) {
-
-                        return searchLoop(nightmare, rows, x, data,loopcount+1);
-                    }
-                    else
-                    {
-                        connection.query(updatequeryYes,[rows[count].id],function(err,results){
-                            io.emit('searchUpdate',"Result : Done Commenting <br>" + JSON.stringify(results));
-                            console.log(results);
-                        });
-                        return searchLoop(nightmare, rows, x+1, data,0);
-
-                    }
-        });
+                        }
+                    });
         }
 
 
